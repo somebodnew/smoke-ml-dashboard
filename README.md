@@ -45,11 +45,8 @@ project/
 │   ├── ML3_CatBoostClassifier.cbm
 │   ├── ML4_BaggingClassifier.pkl
 │   └── ML5_StackingClassifier.pkl
-│   └── ML6_DenseNN.keras       # (будущая модель TensorFlow)
 │
-├── assets/                     # Папка для изображений
-│   └── photo.jpg               # Ваше фото
-│
+├── photo.jpg                   # Ваше фото
 ├── app.py                      # Основной скрипт Streamlit-приложения
 ├── smokeEDA.csv                # Набор данных
 └── requirements.txt            # Файл с зависимостями
@@ -96,3 +93,6 @@ streamlit run app.py
 
 ---
 
+## 4. Деплой на Streamlit cloud
+
+Приложение было задеплоено и доступно по [ссылке](https://smoke-ml-dashboard-5zfnzivdtyqwwywbmvplqx.streamlit.app/) 
