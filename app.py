@@ -57,6 +57,7 @@ def load_catboost_model(path: str) -> CatBoostClassifier:
     model.load_model(path)
     return model
 
+
 def is_catboost(model_key: str) -> bool:
     return "CatBoost" in model_key
 
@@ -71,8 +72,6 @@ def get_model(model_key: str):
         raise FileNotFoundError(f"Файл/папка модели не найден(а): {path}")
 
     if is_tf_nn(model_key):
-        # --- ML6: включите, когда будет TF модель
-        # return load_tf_model(path)
         raise FileNotFoundError(
             "TF-модель (ML6) ещё не подключена. "
             "Добавьте файл/папку модели и раскомментируйте строки в коде."
@@ -198,10 +197,7 @@ def page_dataset_info(df: pd.DataFrame):
     st.subheader("Описательная статистика (числовые признаки)")
     st.dataframe(df.describe().T, use_container_width=True)
 
-    """st.info(
-        "Важно: для корректного инференса препроцессинг должен совпадать с обучением. "
-        "Лучше всего, если в .pkl сохранён sklearn Pipeline (например, StandardScaler + модель)."
-    )"""
+    
 
 
 def page_visuals(df: pd.DataFrame):
