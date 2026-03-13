@@ -10,6 +10,10 @@ import joblib
 
 from catboost import CatBoostClassifier
 
+# --- TensorFlow (понадобится, когда добавите ML6)
+# import tensorflow as tf
+
+
 # Настройки приложения
 st.set_page_config(
     page_title="Smoke Sensors: Fire Alarm — ML Dashboard",
@@ -28,6 +32,12 @@ MODEL_PATHS = {
     "ML3: CatBoost (cbm)": os.path.join(MODELS_DIR, "ML3_CatBoostClassifier.cbm"),
     "ML4: Bagging (pkl)": os.path.join(MODELS_DIR, "ML4_BaggingClassifier.pkl"),
     "ML5: Stacking (pkl)": os.path.join(MODELS_DIR, "ML5_StackingClassifier.pkl"),
+
+    # --- ML6 (добавите позже)
+    # Вариант A (SavedModel папка):
+    # "ML6: Dense NN (TensorFlow)": os.path.join(MODELS_DIR, "ML6_DenseNN"),
+    # Вариант B (один файл .keras):
+    # "ML6: Dense NN (TensorFlow)": os.path.join(MODELS_DIR, "ML6_DenseNN.keras"),
 }
 
 
@@ -58,6 +68,13 @@ def load_catboost_model(path: str) -> CatBoostClassifier:
     return model
 
 
+# --- ML6: TensorFlow Dense NN (заготовка; включите когда модель появится)
+# @st.cache_resource
+# def load_tf_model(path: str):
+#     # Поддерживает и SavedModel (папка), и .keras файл
+#     return tf.keras.models.load_model(path)
+
+
 def is_catboost(model_key: str) -> bool:
     return "CatBoost" in model_key
 
@@ -72,6 +89,8 @@ def get_model(model_key: str):
         raise FileNotFoundError(f"Файл/папка модели не найден(а): {path}")
 
     if is_tf_nn(model_key):
+        # --- ML6: включите, когда будет TF модель
+        # return load_tf_model(path)
         raise FileNotFoundError(
             "TF-модель (ML6) ещё не подключена. "
             "Добавьте файл/папку модели и раскомментируйте строки в коде."
@@ -87,6 +106,9 @@ def get_model(model_key: str):
 # Возвращает вероятность класса 1 (Fire Alarm = 1)
 def predict_proba(model, X: pd.DataFrame, model_key: str) -> np.ndarray:
     if is_tf_nn(model_key):
+        # --- ML6: когда подключите TF модель
+        # probs = model.predict(X.to_numpy(), verbose=0).reshape(-1)
+        # return probs
         raise RuntimeError("TF-модель не подключена (см. комментарии в коде).")
 
     # sklearn / catboost
@@ -197,7 +219,10 @@ def page_dataset_info(df: pd.DataFrame):
     st.subheader("Описательная статистика (числовые признаки)")
     st.dataframe(df.describe().T, use_container_width=True)
 
-    
+    """st.info(
+        "Важно: для корректного инференса препроцессинг должен совпадать с обучением. "
+        "Лучше всего, если в .pkl сохранён sklearn Pipeline (например, StandardScaler + модель)."
+    )"""
 
 
 def page_visuals(df: pd.DataFrame):
@@ -248,60 +273,24 @@ def page_inference(df: pd.DataFrame):
     st.title("Стр. 4 — Инференс (предсказание модели)")
 
     feature_cols = get_feature_columns(df)
-    original_dtypes = df[feature_cols].dtypes.to_dict()
 
     st.sidebar.subheader("Параметры инференса")
     model_key = st.sidebar.selectbox("Выберите модель", list(MODEL_PATHS.keys()))
     threshold = st.sidebar.slider("Порог класса 1 (Fire Alarm)", 0.0, 1.0, 0.5, 0.01)
 
-    # Загружаем модель
     try:
         model = get_model(model_key)
         st.success(f"Модель загружена: {model_key}")
     except Exception as e:
-        st.error(f"Ошибка загрузки модели: {e}")
+        st.error(str(e))
         st.stop()
-    
-    ### ИЗМЕНЕНИЕ 2: Получаем ожидаемый порядок признаков из самой модели ###
-    # Это решает проблему несоответствия порядка столбцов
-    try:
-        # Работает для sklearn pipeline/model, а также для CatBoost
-        if hasattr(model, 'feature_names_in_'):
-            expected_features = list(model.feature_names_in_)
-        # Для CatBoost можно также использовать model.feature_names_
-        elif is_catboost(model_key) and hasattr(model, 'feature_names_'):
-            expected_features = model.feature_names_
-        else:
-            # Если атрибута нет (старая модель, TF), используем порядок из CSV как запасной вариант
-            expected_features = feature_cols
-            st.warning("Не удалось определить порядок признаков из модели. Используется порядок из CSV.")
-            
-    except Exception as e:
-        st.error(f"Не удалось получить список признаков из модели: {e}")
-        expected_features = feature_cols
-
 
     tab1, tab2 = st.tabs(["Ручной ввод (1 объект)", "Загрузка CSV (batch)"])
 
     with tab1:
         X_one = build_single_row_input(df, feature_cols)
         if X_one is not None:
-            # Шаг 1: Приводим типы данных к оригинальным
-            try:
-                X_one_typed = X_one.astype(original_dtypes)
-            except Exception as e:
-                st.error(f"Ошибка приведения типов данных: {e}")
-                st.stop()
-            
-            # Шаг 2: Переупорядочиваем столбцы в соответствии с ожиданиями модели
-            try:
-                X_one_final = X_one_typed[expected_features]
-            except KeyError as e:
-                st.error(f"Ошибка: во входных данных не хватает столбца, который ожидает модель: {e}")
-                st.stop()
-
-            # Используем DataFrame с правильными типами и порядком столбцов
-            proba = predict_proba(model, X_one_final, model_key=model_key)
+            proba = predict_proba(model, X_one, model_key=model_key)
             pred = predict_label_from_proba(proba, threshold=threshold)
 
             st.subheader("Результат")
@@ -329,27 +318,13 @@ def page_inference(df: pd.DataFrame):
             if missing:
                 st.error(f"В загруженном файле не хватает колонок: {missing}")
                 st.stop()
+
             if extra:
                 st.warning(f"Лишние колонки будут проигнорированы: {extra}")
 
             Xb = batch[feature_cols].copy()
-            
-            # Шаг 1: Приводим типы
-            try:
-                Xb_typed = Xb.astype(original_dtypes)
-            except Exception as e:
-                st.error(f"Ошибка приведения типов данных в загруженном файле: {e}")
-                st.stop()
-            
-            # Шаг 2: Переупорядочиваем столбцы
-            try:
-                Xb_final = Xb_typed[expected_features]
-            except KeyError as e:
-                st.error(f"Ошибка: в загруженном файле не хватает столбца, который ожидает модель: {e}")
-                st.stop()
 
-            # Используем DataFrame с правильными типами и порядком столбцов
-            proba = predict_proba(model, Xb_final, model_key=model_key)
+            proba = predict_proba(model, Xb, model_key=model_key)
             pred = predict_label_from_proba(proba, threshold=threshold)
 
             out = batch.copy()
@@ -358,6 +333,13 @@ def page_inference(df: pd.DataFrame):
 
             st.subheader("Предсказания (первые строки)")
             st.dataframe(out.head(50), use_container_width=True)
+
+            st.download_button(
+                "Скачать результаты (CSV)",
+                data=out.to_csv(index=False).encode("utf-8"),
+                file_name="predictions.csv",
+                mime="text/csv"
+            )
 
 
 def main():
@@ -382,7 +364,6 @@ def main():
         page_visuals(df)
     elif page == "4) Инференс":
         page_inference(df)
-
 
 
 main()
